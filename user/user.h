@@ -26,6 +26,9 @@ int uptime(void);
 int crypto_op(struct crypto_op*, int);
 int take_shared_memory_request(void**, uint64*);
 int remove_shared_memory_request(void*, uint64);
+//added
+uint64 map_shared_pages(int src_pid, uint64 src_va, uint64 size);
+uint64 unmap_shared_pages(uint64 addr, uint64 size);
 
 // ulib.c
 int stat(const char*, struct stat*);

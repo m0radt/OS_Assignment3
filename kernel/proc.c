@@ -688,3 +688,65 @@ procdump(void)
     printf("\n");
   }
 }
+//added
+uint64
+map_shared_pages(struct proc* src_proc, struct proc* dst_proc, uint64 src_va, uint64 size){
+  if(src_proc == 0 || dst_proc == 0 || src_va == 0 || size == 0){
+    return 0;
+  }
+  uint64 down = PGROUNDDOWN(src_va);
+  uint64 up = PGROUNDUP(src_va+size);
+  //(up-down) -> amount of added bytes
+  //(src_va-down) -> offset
+  uint64 dst_va = PGROUNDDOWN(dst_proc->sz) + up - down + src_va - down;
+  uint64 pa, i;
+  pte_t *pte;
+  uint flags;
+  for(i = down; i < up; i += PGSIZE){
+    if((pte = walk(src_proc->pagetable, i, 0)) == 0){
+      uvmunmap(dst_proc->pagetable, 0, (i - down) / PGSIZE - 1, 0);
+      return 0;
+    }
+    if((*pte & PTE_V) == 0 && (*pte & PTE_U) == 0){
+      uvmunmap(dst_proc->pagetable, 0, (i - down) / PGSIZE, 0);
+      return 0;
+    }
+    pa = PTE2PA(*pte);
+    flags = PTE_FLAGS(*pte) | PTE_S;
+    if(mappages(dst_proc->pagetable, dst_proc->sz, PGSIZE, (uint64)pa, flags) != 0){
+      uvmunmap(dst_proc->pagetable, 0, (i - down) / PGSIZE, 0);
+      return 0;
+    }
+    dst_proc->sz = dst_proc->sz + PGSIZE;
+  }
+  return dst_va-PGSIZE;
+}
+
+//added
+uint64
+unmap_shared_pages(struct proc* p, uint64 addr, uint64 size){
+  if(p == 0 || addr == 0 || size == 0){
+    return -1;
+  }
+  uint64 down = PGROUNDDOWN(addr);
+  uint64 up = PGROUNDUP(addr+size);
+  int npages = (up-down)/PGSIZE;
+  uvmunmap(p->pagetable, down, npages, 0);
+  p->sz = p->sz - npages * PGSIZE;
+  return 0;
+}
+
+//added
+struct proc*    
+find_proc(int pid){
+  struct proc* p;
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->pid == pid) {
+      return p;
+    } else {
+      release(&p->lock);
+    }
+  }
+  return 0;
+}
